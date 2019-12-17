@@ -1,0 +1,110 @@
+Hello, I'm new to Ubooquity and I've taken to using it primarily for comics. With so many to sort through, it can be hard to keep track of where you are in any given series. So I've been trying to figure out how to mark them as Read or Started Reading. I couldn't find any solutions online or here on the forum so I decided to try doing it myself. (However if this info was already out there, please let me know)
+﻿
+﻿This solution is currently only tested in the plex theme for Ubooquity as that's the theme I use, and only works for comics.
+This Theme: https://ubooquity.userecho.com/communities/1/topics/666-plex-based-theme
+
+Through tweaking and digging in the code, I discovered that a GET pathway exists where one can request some data if they have the id of a comic. That path looks like this:
+﻿host_name:port/user-api/bookmark?docId=****
+
+where host_name is your ip or domain, port is the port, and **** is the id of the comic.
+﻿
+
+The returned JSON looks like this:
+
+{
+
+"docId" : 3326,
+
+"isBook" : false,
+
+"mark" : "0",
+
+"isFinished" : false,
+
+"lastUpdate" : 1576387903971
+
+}
+﻿
+It's important to note that "mark" in the above JSON is the current page saved in the bookmark of that particular comic. Therefore, using a GET request we can determine if a comic has been started or not based on that value. Also, if a comic has never been opened, the GET request will return null.
+﻿
+
+The last bit of information we need is where to get that ID for the comic, and this can be found by looking at the source url of the cover image displayed. It will say /comics/****/comic_filename?params (again where **** is the comic id).
+﻿
+The following JS code will loop through all of the comics (exluding folders) on the current page, make a GET request for each, and (so long as the value of mark is not 0 or null) will add a "reading" label.
+
+///////////////////
+//MODS
+///////////////////
+// Anonymous "self-invoking" function
+(function() {
+var startingTime = new Date().getTime();
+// Load the script
+var script = document.createElement("SCRIPT");
+script.src = 'https://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js';
+script.type = 'text/javascript';
+document.getElementsByTagName("head")[0].appendChild(script);
+
+// Poll for jQuery to come into existance
+var checkReady = function(callback) {
+if (window.jQuery) {
+callback(jQuery);
+}
+else {
+window.setTimeout(function() { checkReady(callback); }, 20);
+}
+};
+
+// Start polling...
+checkReady(function($) {
+//////////////////////////////////
+//Add currently reading condition to comic
+//////////////////////////////////
+$('.thumb a img').each(function(){
+raw_src = $(this).attr('src')
+page_num = '0';
+//sort comics from folders
+if (raw_src.search("folder") >= 0){
+//console.log("raw_src: "+raw_src);
+} else {
+//extract Comic ID
+thing = $(this);
+src = $(this).attr('src');
+//console.log("source: "+src);
+$(this).closest('.thumb').append('');
+var comicid = src.split('/');
+//console.log("Comic ID: "+comicid[2]);
+//get comic meta from server
+json_url = window.location.origin+"/user-api/bookmark?docId="+comicid[2];
+console.log("url: "+json_url);
+
+$.getJSON( json_url, function() {
+console.log( "success" );
+}).done(function( data ) {
+current_this = thing;
+if (data != null){
+var items = [];
+var c_id = '';
+$.each( data, function( key, val ) {
+if (key == 'docId'){c_id = val;}
+if (key == 'mark'){
+page_num = val;
+if (page_num != '0'){
+$("img[src*='"+c_id+"']").closest('.thumb').find('.number').html("reading");
+$("img[src*='"+c_id+"']").closest('.thumb').find('.numberblock').addClass("reading");
+}
+//console.log("page_num "+page_num);
+}
+});
+}
+}).fail(function(){});
+}
+//console.log("triggered");
+});
+});
+})();
+// end Anonymous "self-invoking" function
+﻿
+﻿Add this script at the bottom of themeScript.js in the plextheme files. Note: This script can only determine if the comic has been started, not when it is completed. So to clear the "reading" label, simply return the comic to page 1 and exit it. I also added some styles to make the label itself look ok. This can be added to comics.css 
+﻿.reading{ bottom: 0; background-color: #009218 !important; top: initial !important;} 
+﻿
+﻿ Anyone with knowledge of js and css should be able to modify this for their own favorite theme, or hopefully this can help someone more clever than me develop a universal script that can do the same thing for everyone.
